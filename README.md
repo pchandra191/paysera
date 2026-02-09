@@ -48,20 +48,35 @@ php bin/console app:process-transfers
 
 ## API Endpoints
 
-Create Account:
+**Create/Update Account** (Upsert):
+```http
 POST /api/account
-Body:
+Authorization: Bearer <token>
+Content-Type: application/json
+
 {
-  "owner": "Alice",
   "balance": 1000.00
 }
-Response:
+```
+**Response (First time - Created):**
+```json
 {
   "accountId": 1,
-  "owner": "Alice",
-  "balance": 1000,
+  "owner": "user@example.com",
+  "balance": "1000.00",
   "status": "CREATED"
 }
+```
+**Response (Subsequent calls - Updated):**
+```json
+{
+  "accountId": 1,
+  "owner": "user@example.com",
+  "balance": "1500.00",
+  "status": "UPDATED"
+}
+```
+*Note: Each user can only have ONE account. Subsequent POST requests will update the existing account balance instead of creating a new one.*
 
 Transfer Funds:
 POST /api/transfer

@@ -19,8 +19,8 @@ class AccountController extends AbstractController
     ) {
     }
 
-    #[Route('/account', name: 'create_account', methods: ['POST'])]
-    public function createAccount(Request $request): JsonResponse
+    #[Route('/account', name: 'upsert_account', methods: ['POST'])]
+    public function upsertAccount(Request $request): JsonResponse
     {
         $user = $this->getUser();
         if (!$user instanceof \App\Entity\User) {
@@ -39,37 +39,49 @@ class AccountController extends AbstractController
                 throw new \InvalidArgumentException("Balance cannot be negative");
             }
 
-            $account = new Account();
-            $account->setUser($user);
-            $account->setOwner($user->getUserIdentifier());
+            // Check if user already has an account
+            $account = $this->em->getRepository(Account::class)->findOneBy(['user' => $user]);
+
+            $isNewAccount = false;
+            if (!$account) {
+                // Create new account if user doesn't have one
+                $account = new Account();
+                $account->setUser($user);
+                $account->setOwner($user->getUserIdentifier());
+                $isNewAccount = true;
+            }
+
+            // Update balance (for both new and existing accounts)
             $account->setBalance((string) $data['balance']);
 
             $this->em->persist($account);
             $this->em->flush();
 
-            $this->logger->info('Account created successfully', [
+            $logMessage = $isNewAccount ? 'Account created successfully' : 'Account balance updated successfully';
+            $this->logger->info($logMessage, [
                 'accountId' => $account->getId(),
                 'owner' => $account->getOwner(),
-                'balance' => $account->getBalance()
+                'balance' => $account->getBalance(),
+                'isNew' => $isNewAccount
             ]);
 
             return $this->json([
                 'accountId' => $account->getId(),
                 'owner' => $account->getOwner(),
                 'balance' => $account->getBalance(),
-                'status' => 'CREATED'
-            ], 201);
+                'status' => $isNewAccount ? 'CREATED' : 'UPDATED'
+            ], $isNewAccount ? 201 : 200);
 
         } catch (\InvalidArgumentException $e) {
-            $this->logger->error('Account creation failed: ' . $e->getMessage(), ['exception' => $e]);
+            $this->logger->error('Account operation failed: ' . $e->getMessage(), ['exception' => $e]);
             return $this->json(['error' => $e->getMessage()], 400);
 
         } catch (\Doctrine\DBAL\Exception $e) {
-            $this->logger->critical('Database error during account creation', ['exception' => $e]);
+            $this->logger->critical('Database error during account operation', ['exception' => $e]);
             return $this->json(['error' => 'Database error occurred'], 500);
 
         } catch (\Throwable $e) {
-            $this->logger->critical('Unexpected error during account creation', ['exception' => $e]);
+            $this->logger->critical('Unexpected error during account operation', ['exception' => $e]);
             return $this->json(['error' => 'Unexpected error occurred'], 500);
         }
     }

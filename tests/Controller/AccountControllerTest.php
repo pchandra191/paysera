@@ -73,4 +73,34 @@ class AccountControllerTest extends WebTestCase
 
         $this->assertEquals('Balance cannot be negative', $response['error']); // Verify message
     }
+
+    public function testUpdateAccountBalance(): void
+    {
+        $email = null;
+        $client = $this->getAuthenticatedClient($email);
+
+        // Create account with initial balance
+        $client->request('POST', '/api/account', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([
+            'balance' => 1000.00
+        ]));
+
+        $this->assertResponseStatusCodeSame(201);
+        $firstResponse = json_decode($client->getResponse()->getContent(), true);
+        $accountId = $firstResponse['accountId'];
+        $this->assertEquals('CREATED', $firstResponse['status']);
+
+        // Update the same account with new balance
+        $client->request('POST', '/api/account', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode([
+            'balance' => 2500.00
+        ]));
+
+        $this->assertResponseStatusCodeSame(200); // 200 for update, not 201
+        $secondResponse = json_decode($client->getResponse()->getContent(), true);
+
+        // Should be the same account ID
+        $this->assertEquals($accountId, $secondResponse['accountId']);
+        $this->assertEquals($email, $secondResponse['owner']);
+        $this->assertEquals(2500.00, $secondResponse['balance']);
+        $this->assertEquals('UPDATED', $secondResponse['status']);
+    }
 }
